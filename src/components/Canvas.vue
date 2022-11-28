@@ -1,11 +1,11 @@
-<template lang="pug">
-div(ref="canvas")
+<template>
+  <div ref="canvas"></div>
 </template>
 
 <script>
 // import { Clock, PerspectiveCamera, Scene, WebGLRenderer } from 'three'
 import * as THREE from "three"
-import TrackballControls from "three-trackballcontrols"
+// import TrackballControls from "three-trackballcontrols"
 
 export default {
   name: 'Canvas',
@@ -50,17 +50,17 @@ export default {
     this.light.position.set(0, 0, 10)
     this.camera.position.z = 5
     this.scene.background = new THREE.Color('hsl(0, 100%, 100%)')
-    this.controls = new TrackballControls(
-      this.camera,
-      this.renderer.domElement
-    )
-    this.controls.rotateSpeed = 1.0
-    this.controls.zoomSpeed = 5
-    this.controls.panSpeed = 0.8
-    this.controls.noZoom = false
-    this.controls.noPan = false
-    this.controls.staticMoving = true
-    this.controls.dynamicDampingFactor = 0.3
+    // this.controls = new TrackballControls(
+    //   this.camera,
+    //   this.renderer.domElement
+    // )
+    // this.controls.rotateSpeed = 1.0
+    // this.controls.zoomSpeed = 5
+    // this.controls.panSpeed = 0.8
+    // this.controls.noZoom = false
+    // this.controls.noPan = false
+    // this.controls.staticMoving = true
+    // this.controls.dynamicDampingFactor = 0.3
   },
   mounted: function () {
     this.$refs.canvas.appendChild(this.renderer.domElement)

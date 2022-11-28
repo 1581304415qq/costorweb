@@ -6,7 +6,7 @@
     </div>
     <div class="gps">
       <div class="data">
-        <p class="" v-for="(value, key) in rcvdata" :key="key">{{ value }}</p>
+        <p class="" v-for="(value, key) in rcvdata" :key="key" >{{ value }}</p>
       </div>
       <div class="Visualization">
       <div class="BaiduMap">
@@ -18,7 +18,11 @@
         >
         </baidu-map>
       </div>
-      <div id="myChart" :style="{width: '300px', height: '300px'}"></div>
+      <div id="myChart" :style="{width: '1200px', height: '300px'}"></div>
+      </div>
+      <div class="Visualization">
+        <!-- 姿态可视化 -->
+        <cube v-bind:window={width:300,height:300} v-bind:angle="angle"></cube>
       </div>
     </div>
     <div class="gga">
@@ -26,7 +30,8 @@
     </div>
     <div class="control">
     <div>
-    <input v-model="key"/>
+      <input v-model="key"/>
+      <button @click="reset">reset</button>
     </div>
       <div class="checkboxs">
         <div class="item" v-for="(item,key) in checkboxs" :key="key">
@@ -48,16 +53,21 @@
 import Vue from "vue";
 import GPS from "gps";
 import BaiduMap from "vue-baidu-map";
-import * as echarts from 'echarts';
+import * as echarts from "echarts";
+import cube from "@/components/cube";
+
 Vue.use(BaiduMap, { ak: "kL4sVc9KqpqoLMPsipuhCTjsx3esNiRv" });
-Vue.prototype.$echarts = echarts
+Vue.prototype.$echarts = echarts;
 
 export default {
   name: "GpsTest",
+  components: { cube },
   data() {
     return {
       // chart
-      chartData:[],
+      myChart: null,
+      chartData: { data: [], data2: [], axis: [] },
+      pre: null,
       //-------
       // map
       map: null,
@@ -76,6 +86,7 @@ export default {
       websock: null,
       gps: new GPS(),
       gga: "",
+      angle:[0,0,0],
       checkboxs: [
         { value: "GGA", select: false },
         { value: "GSV", select: false },
@@ -85,15 +96,15 @@ export default {
         { value: "GLL", select: false },
         { value: "ZDA", select: false },
         { value: "TXT", select: false },
-        { value: "ATT", select: false },
+        { value: "ATT", select: true },
       ],
     };
   },
   created() {
     // this.initWebSocket();
   },
-  mounted(){
-    this.drawLine();
+  mounted() {
+    this.initLine(this.chartData);
   },
   destroyed() {
     this.websock.close(); //离开路由之后断开websocket连接
@@ -149,10 +160,10 @@ export default {
       if (data.status === 0) {
         this.map.clearOverlays();
         var marker = new BMap.Marker(data.points[0]);
-        var label = new BMap.Label("转换后的百度坐标（正确）", {
-          offset: new BMap.Size(20, -10),
-        });
-        marker.setLabel(label); //添加百度label
+        // var label = new BMap.Label("转换后的百度坐标（正确）", {
+        //   offset: new BMap.Size(20, -10),
+        // });
+        // marker.setLabel(label); //添加百度label
         this.map.addOverlay(marker);
         this.map.setCenter(data.points[0]);
       }
@@ -195,16 +206,34 @@ export default {
 
       // Add an event listener on all protocols
       this.gps.on("data", (parsed) => {
-        // console.log("gps parse:", parsed);
+        // console.log("nmea parse:", parsed);
         if (parsed.type == "GGA") {
-          console.log("gga parse:", parsed);
+          // console.log("gga parse:", parsed);
           this.gga = parsed;
           this.center.lat = parsed.lat;
           this.center.lng = parsed.lon;
           this.translate(this.center);
-          this.chartData.push(parsed.lat)
+          // if (this.chartData.data.length > 100) return;
+          let time = parseFloat(parsed.raw.split(",")[1]);
+          this.chartData.data.push(time / 10000);
+          if (this.pre == null) this.pre = time;
+          this.chartData.data2.push(this.pre - time);
+          // console.log(time, time - this.pre);
+          this.chartData.axis.push(this.chartData.data.length);
+          this.drawLine(this.chartData);
+          this.pre = time;
+        }
+        else if (parsed.type == "ATT") {
+          this.angle=[parsed.pitch*3,parsed.rool*3,parsed.yaw*3]
         }
       });
+    },
+    reset() {
+      this.pre = null;
+      this.chartData.data.length = 0;
+      this.chartData.data2.length = 0;
+      this.chartData.axis.length = 0;
+      this.drawLine(this.chartData)
     },
     websocketonopen() {
       //连接建立之后执行send方法发送数据
@@ -215,8 +244,14 @@ export default {
       //连接建立失败重连
       this.initWebSocket();
     },
+    Filter(e, cb) {
+      this.checkboxs.forEach((v, i) => {
+        console.log(v.value, e)
+        if(v.select && e.indexOf(v.value)>-1)cb(e)
+      })
+    },
     websocketonmessage(e) {
-      console.log("rev ", e.data);
+      // console.log("rev ", e.data);
       if (this.rcvdata.length >= 200)
         this.rcvdata = this.rcvdata.splice(100, 100);
       //数据接收
@@ -225,15 +260,17 @@ export default {
         // console.log(redata);
         if (redata.data.length == 0) return;
         // gps数据
-        if (redata.proto == 144) this.rcvdata.unshift(Buffer.from(redata.data));
+        if (redata.proto == 144) this.Filter(String(Buffer.from(redata.data)),e=>this.rcvdata.unshift(e));
         // 非gps数据
         else
           this.rcvdata.unshift(
             redata.data.map((d) => d.toString(16)).toString()
           );
         this.gpsData = redata;
-        if (redata.proto == 144)
+        if (redata.proto == 144) {
+          // console.log("144:",Buffer.from(redata.data).toString())
           this.gps.update(Buffer.from(redata.data).toString());
+      }
       } catch (e) {}
     },
     websocketsend(Data) {
@@ -262,23 +299,75 @@ export default {
     },
 
     //-------
-    drawLine(){
-        // 基于刚刚准备好的 DOM 容器，初始化 EChart 实例
-        let myChart = this.$echarts.init(document.getElementById('myChart'))
-        // 绘制图表
-        myChart.setOption({
-            title: { text: '太阳系八大行星的卫星数量' },
-            tooltip: {},
-            xAxis: {
-                data: ["水星","金星","地球","火星","木星","土星","金王星","海王星"]
-            },
-            yAxis: {},
-            series: [{
-                name: '数量',
-                type: 'line',
-                data: [-10, 0, 1, 2, 79, 82, 27, 14]
-            }]
-        });
+    drawLine({ data, data2, axis }) {
+      this.myChart.setOption({
+        series: [
+          {
+            data: data,
+          },
+          { data: data2 },
+        ],
+        xAxis: { data: axis },
+      });
+    },
+    initLine({ data, data2, axis }) {
+      // 基于刚刚准备好的 DOM 容器，初始化 EChart 实例
+      this.myChart = this.$echarts.init(document.getElementById("myChart"));
+      let option = {
+        title: {
+          text: "Dynamic Data & Time Axis",
+        },
+        tooltip: {
+          trigger: "axis",
+          //   formatter: function (params) {
+          //     params = params[0];
+          //     var date = new Date(params.name);
+          //     return (
+          //       date.getDate() +
+          //       "/" +
+          //       (date.getMonth() + 1) +
+          //       "/" +
+          //       date.getFullYear() +
+          //       " : " +
+          //       params.value[1]
+          //     );
+          //   },
+          //   axisPointer: {
+          //     animation: false,
+          //   },
+        },
+        xAxis: {
+          // type: "time",
+          splitLine: {
+            show: false,
+          },
+          type: "category",
+          data: axis,
+        },
+        yAxis: {
+          type: "value",
+          boundaryGap: [0, "100%"],
+          splitLine: {
+            show: false,
+          },
+        },
+        series: [
+          {
+            name: "Time /10000",
+            type: "line",
+            showSymbol: false,
+            data: data,
+          },
+          {
+            name: "Margin",
+            type: "line",
+            showSymbol: false,
+            data: data2,
+          },
+        ],
+      };
+      // 绘制图表
+      this.myChart.setOption(option);
     },
   },
 };
@@ -344,7 +433,7 @@ export default {
   display: flex;
   font-size: 8px;
   padding-top: 20px;
-  flex-direction: column;
+  flex-direction: row;
   overflow: hidden;
   justify-content: center;
 }
@@ -387,5 +476,8 @@ export default {
   display: flex;
   justify-content: flex-start;
   width: 30px;
+}
+.Visualization {
+  width: 600px;
 }
 </style>
