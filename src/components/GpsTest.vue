@@ -22,7 +22,9 @@
       </div>
       <div class="Visualization">
         <!-- 姿态可视化 -->
-        <cube v-bind:window={width:300,height:300} v-bind:angle="angle"></cube>
+        <cube v-bind:window={width:300,height:200} v-bind:angle="angle"></cube>
+        <input v-model="cube_p">P:</input>
+        <input v-model="cube_q">Q:</input>
       </div>
     </div>
     <div class="gga">
@@ -58,12 +60,22 @@ import cube from "@/components/cube";
 
 Vue.use(BaiduMap, { ak: "kL4sVc9KqpqoLMPsipuhCTjsx3esNiRv" });
 Vue.prototype.$echarts = echarts;
+function parseNumber(num) {
+
+if (num === '') {
+  return null;
+}
+return parseFloat(num);
+}
 
 export default {
   name: "GpsTest",
   components: { cube },
   data() {
     return {
+      // cube
+      cube_p: 0,
+      cube_q: 0,
       // chart
       myChart: null,
       chartData: { data: [], data2: [], axis: [] },
@@ -108,6 +120,22 @@ export default {
   },
   destroyed() {
     this.websock.close(); //离开路由之后断开websocket连接
+  },
+  computed: {
+    cube_pq () {
+      let p = parseInt(parseNumber(this.cube_p) * 10000)
+      let q=parseInt(parseNumber(this.cube_q) * 10000)
+      return [(p&0xff00)>>8,p&0xff,(q&0xff00)>>8,q&0xff]
+    }
+  },
+  watch:{
+  cube_q: function(newVal, oldVal) {
+    console.log(newVal,this.cube_pq)
+    this.websocketsend(JSON.stringify({ command: 52, data: this.cube_pq }));
+  },
+  cube_p: function(newVal, oldVal) {
+    console.log(newVal,this.cube_pq)
+  },
   },
   methods: {
     //-----map------

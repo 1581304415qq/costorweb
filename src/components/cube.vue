@@ -55,6 +55,8 @@ export default {
     this.renderer.setSize(this.window.width, this.window.height);
     this.light.position.set(0, 0, 10);
     this.camera.position.z = 5;
+    this.camera.position.y = 1;
+    this.camera.position.x = 1;
     this.scene.background = new THREE.Color("hsl(0, 100%, 100%)");
   },
   mounted: function () {
